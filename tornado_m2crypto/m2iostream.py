@@ -175,15 +175,18 @@ class M2IOStream(SSLIOStream):
                 res = self.socket.accept_ssl()
             else:
                 res = self.socket.connect_ssl()
+            # The err_num is used for the handshake state either way
+            err_num = self.socket.ssl_get_error(res)
             if res == 0:
-                # TODO: We should somehow get SSL_WANT_READ/WRITE here
-                #       and then set the correct flag, although it does
-                #       work as long as one of them gets set
-                self._handshake_reading = True
-                # self._handshake_writing = True
-                return
+                if err_num == ssl.SSL_ERROR_WANT_READ:
+                    self._handshake_reading = True
+                    return
+                elif err_num == ssl.SSL_ERROR_WANT_WRITE:
+                    self._handshake_writing = True
+                    return
+                else: # SSL_ERROR_ZERO_RETURN and others
+                    return self.close()
             if res < 0:
-                err_num = self.socket.ssl_get_error(res)
                 gen_log.error("Err: %s" % err_num)
                 gen_log.error("Err Str: %s" % Err.get_error_reason(err_num))
                 return self.close()
